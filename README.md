@@ -10,9 +10,9 @@ Incremento 1 (RF-02 · registrar cliente con nombre, teléfono y una o varias di
 
 | Tarea | Módulo | Estado |
 |---|---|---|
-| T-01 Estructura base y repositorio | proyecto | En curso |
-| T-03 Esquema SQLite con FK | almacenamiento_datos | Pendiente |
-| T-04 Guardado transaccional y consulta | almacenamiento_datos | Pendiente |
+| T-01 Estructura base y repositorio | proyecto | Terminada |
+| T-03 Esquema SQLite con FK | almacenamiento_datos | Terminada (P11) |
+| T-04 Guardado transaccional y consulta | almacenamiento_datos | Terminada (CA-04, CA-38, P01, P12, P13) |
 | T-02 / T-05 Contrato y validación | clientes_registro | Pendiente (módulo 2) |
 | T-06 Integración y P01 | ambos | Pendiente |
 

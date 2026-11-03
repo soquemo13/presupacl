@@ -9,6 +9,7 @@ Las otras siete tablas se agregan en el incremento que las use.
 """
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 # data/presupacl.db en la raíz del repositorio. Las pruebas pasan su propia ruta.
@@ -54,3 +55,58 @@ def abrir_conexion(ruta_bd=None):
 def crear_esquema(conexion):
     """Crea las tablas si no existen. Se puede llamar varias veces sin perder datos."""
     conexion.executescript(ESQUEMA)
+
+
+def _ahora_iso():
+    """Fecha y hora local del servidor en ISO 8601 (supuesto de D08, por validar con ACL)."""
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def crear_cliente_con_direcciones(conexion, nombre, telefono, direcciones):
+    """Guarda un cliente y todas sus direcciones en una sola transacción (RF-02).
+
+    Recibe datos ya validados por clientes_registro. Si cualquier INSERT falla,
+    se revierte todo y no queda un cliente a medias (prueba P12). Todas las
+    consultas son parametrizadas (prueba P13).
+
+    Regresa el id_cliente creado o lanza ErrorAlmacenamiento.
+    """
+    if not direcciones:
+        # Barrera de integridad: un cliente sin dirección no se guarda (CA-68).
+        raise ErrorAlmacenamiento("El cliente debe tener al menos una dirección; no se guardó.")
+
+    ahora = _ahora_iso()
+    try:
+        with conexion:  # confirma al terminar o revierte si hay excepción
+            cursor = conexion.execute(
+                "INSERT INTO clientes (nombre, telefono, creado_en, actualizado_en) VALUES (?, ?, ?, ?)",
+                (nombre, telefono, ahora, ahora),
+            )
+            id_cliente = cursor.lastrowid
+            for direccion in direcciones:
+                conexion.execute(
+                    "INSERT INTO direcciones_cliente (id_cliente, direccion) VALUES (?, ?)",
+                    (id_cliente, direccion),
+                )
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudo guardar el cliente; no se guardó ningún dato.") from error
+    return id_cliente
+
+
+def obtener_cliente(conexion, id_cliente):
+    """Consulta un cliente con sus direcciones. Regresa None si no existe."""
+    fila = conexion.execute(
+        "SELECT id_cliente, nombre, telefono, creado_en, actualizado_en FROM clientes WHERE id_cliente = ?",
+        (id_cliente,),
+    ).fetchone()
+    if fila is None:
+        return None
+
+    direcciones = conexion.execute(
+        "SELECT id_direccion, direccion FROM direcciones_cliente WHERE id_cliente = ? ORDER BY id_direccion",
+        (id_cliente,),
+    ).fetchall()
+
+    cliente = dict(fila)
+    cliente["direcciones"] = [dict(d) for d in direcciones]
+    return cliente
