@@ -52,10 +52,10 @@ python -m pytest -v
 
 ```bash
 python -m proyecto.auth.auth admin      # solo la primera vez: pide la contraseña y crea el usuario
-python -m proyecto.main                 # luego abrir http://127.0.0.1:5000 en Chrome o Edge
+python -m proyecto.main                 # luego abrir http://127.0.0.1:8000 en Chrome o Edge
 ```
 
-La contraseña nunca se escribe en el código. Opcional: definir `PRESUPACL_SECRET_KEY` para que la sesión no se cierre al reiniciar, y `PRESUPACL_HOST=0.0.0.0` para abrirla desde otra computadora de la red local.
+La contraseña nunca se escribe en el código. Opcional: definir `PRESUPACL_SECRET_KEY` para que la sesión no se cierre al reiniciar, y `PRESUPACL_HOST=0.0.0.0` para abrirla desde otra computadora de la red local. El puerto es 8000 (en macOS el 5000 lo ocupa AirPlay); se cambia con `PRESUPACL_PORT`.
 
 ## Demostración del incremento 1
 

@@ -4,12 +4,14 @@ SUPUESTO — validar con el equipo (D09): Flask como framework web.
 
 Ejecutar desde la raíz del repositorio:
     python -m proyecto.auth.auth admin      # solo la primera vez: crea el usuario
-    python -m proyecto.main                 # abre http://127.0.0.1:5000
+    python -m proyecto.main                 # abre http://127.0.0.1:8000
 
 Variables de entorno (opcionales, nunca en el código):
     PRESUPACL_SECRET_KEY  llave de las sesiones; si falta se genera una al
                           arrancar y las sesiones se cierran al reiniciar.
     PRESUPACL_HOST        127.0.0.1 por defecto; 0.0.0.0 para la red local (RNF-06).
+    PRESUPACL_PORT        8000 por defecto. No se usa 5000 porque en macOS lo
+                          ocupa el Receptor AirPlay y el navegador da error 403.
 """
 
 import functools
@@ -189,4 +191,8 @@ def crear_app(ruta_bd=None, secret_key=None):
 
 
 if __name__ == "__main__":
-    crear_app().run(host=os.environ.get("PRESUPACL_HOST", "127.0.0.1"), port=5000, debug=False)
+    crear_app().run(
+        host=os.environ.get("PRESUPACL_HOST", "127.0.0.1"),
+        port=int(os.environ.get("PRESUPACL_PORT", "8000")),
+        debug=False,
+    )
