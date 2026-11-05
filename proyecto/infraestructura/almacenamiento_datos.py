@@ -1,11 +1,12 @@
 """almacenamiento_datos: único módulo de PresupACL que accede a la base de datos.
 
-Responsabilidad (sección 3.8 de la especificación v2.4): centralizar la conexión
+Responsabilidad (sección 3.8 de la especificación v2.5): centralizar la conexión
 a SQLite, las consultas parametrizadas, las transacciones y la integridad
 referencial. Ningún otro módulo debe ejecutar SQL.
 
-Incremento 1 (RF-02): solo se crean las tablas clientes y direcciones_cliente.
-Las otras siete tablas se agregan en el incremento que las use.
+Cada tabla se agrega en el incremento que la usa:
+- Incremento 1 (RF-02): clientes, direcciones_cliente.
+- Incremento 2 (RF-01): usuarios.
 """
 
 import sqlite3
@@ -15,7 +16,7 @@ from pathlib import Path
 # data/presupacl.db en la raíz del repositorio. Las pruebas pasan su propia ruta.
 RUTA_BD_PREDETERMINADA = Path(__file__).resolve().parents[2] / "data" / "presupacl.db"
 
-# Esquema según el diccionario de datos (sección 3.4 de v2.4).
+# Esquema según el diccionario de datos (sección 3.4 de v2.5).
 # Los CHECK evitan guardar textos vacíos aunque un módulo se salte la validación.
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS clientes (
@@ -30,6 +31,12 @@ CREATE TABLE IF NOT EXISTS direcciones_cliente (
     id_direccion    INTEGER PRIMARY KEY,
     id_cliente      INTEGER NOT NULL REFERENCES clientes (id_cliente),
     direccion       TEXT NOT NULL CHECK (length(trim(direccion)) > 0)
+);
+
+CREATE TABLE IF NOT EXISTS usuarios (
+    id_usuario      INTEGER PRIMARY KEY,
+    usuario         TEXT NOT NULL UNIQUE CHECK (length(trim(usuario)) > 0),
+    password_hash   TEXT NOT NULL
 );
 """
 
@@ -110,3 +117,33 @@ def obtener_cliente(conexion, id_cliente):
     cliente = dict(fila)
     cliente["direcciones"] = [dict(d) for d in direcciones]
     return cliente
+
+
+# ---------- Usuarios (RF-01) ----------
+
+def crear_usuario(conexion, usuario, password_hash):
+    """Guarda un usuario con su contraseña ya convertida en hash por auth.
+
+    Este módulo nunca recibe la contraseña en texto plano (RNF-03).
+    Regresa el id_usuario o lanza ErrorAlmacenamiento si el usuario ya existe.
+    """
+    try:
+        with conexion:
+            cursor = conexion.execute(
+                "INSERT INTO usuarios (usuario, password_hash) VALUES (?, ?)",
+                (usuario, password_hash),
+            )
+    except sqlite3.IntegrityError as error:
+        raise ErrorAlmacenamiento(f"El usuario «{usuario}» ya existe o no es válido.") from error
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudo guardar el usuario.") from error
+    return cursor.lastrowid
+
+
+def obtener_usuario(conexion, usuario):
+    """Regresa {id_usuario, usuario, password_hash} o None si no existe."""
+    fila = conexion.execute(
+        "SELECT id_usuario, usuario, password_hash FROM usuarios WHERE usuario = ?",
+        (usuario,),
+    ).fetchone()
+    return dict(fila) if fila else None
