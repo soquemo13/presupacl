@@ -6,7 +6,7 @@ referencial. Ningún otro módulo debe ejecutar SQL.
 
 Cada tabla se agrega en el incremento que la usa:
 - Incremento 1 (RF-02): clientes, direcciones_cliente.
-- Incremento 2 (RF-01): usuarios.
+- Incremento 2 (RF-01, RF-21): usuarios, configuracion_acl.
 """
 
 import sqlite3
@@ -37,6 +37,19 @@ CREATE TABLE IF NOT EXISTS usuarios (
     id_usuario      INTEGER PRIMARY KEY,
     usuario         TEXT NOT NULL UNIQUE CHECK (length(trim(usuario)) > 0),
     password_hash   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS configuracion_acl (
+    id_configuracion        INTEGER PRIMARY KEY CHECK (id_configuracion = 1),
+    nombre_comercial        TEXT NOT NULL CHECK (length(trim(nombre_comercial)) > 0),
+    telefono                TEXT NOT NULL CHECK (length(trim(telefono)) > 0),
+    correo                  TEXT NOT NULL CHECK (length(trim(correo)) > 0),
+    logo_ruta               TEXT,
+    condiciones_default     TEXT NOT NULL,
+    vigencia_dias_default   INTEGER NOT NULL CHECK (vigencia_dias_default > 0),
+    iva_tasa_default        TEXT NOT NULL,
+    utilidad_tasa_default   TEXT NOT NULL,
+    metodo_utilidad         TEXT NOT NULL CHECK (metodo_utilidad IN ('margen', 'recargo'))
 );
 """
 
@@ -216,5 +229,40 @@ def obtener_usuario(conexion, usuario):
     fila = conexion.execute(
         "SELECT id_usuario, usuario, password_hash FROM usuarios WHERE usuario = ?",
         (usuario,),
+    ).fetchone()
+    return dict(fila) if fila else None
+
+
+# ---------- Configuración de ACL (RF-21) ----------
+
+CAMPOS_CONFIGURACION = (
+    "nombre_comercial", "telefono", "correo", "logo_ruta", "condiciones_default",
+    "vigencia_dias_default", "iva_tasa_default", "utilidad_tasa_default", "metodo_utilidad",
+)
+
+
+def guardar_configuracion(conexion, datos):
+    """Crea o reemplaza el único registro de configuración (id 1).
+
+    Si falla, revierte y lanza ErrorAlmacenamiento; el registro anterior queda igual (CA-65).
+    """
+    columnas = ", ".join(CAMPOS_CONFIGURACION)
+    marcas = ", ".join("?" for _ in CAMPOS_CONFIGURACION)
+    actualizacion = ", ".join(f"{c} = excluded.{c}" for c in CAMPOS_CONFIGURACION)
+    try:
+        with conexion:
+            conexion.execute(
+                f"INSERT INTO configuracion_acl (id_configuracion, {columnas}) VALUES (1, {marcas}) "
+                f"ON CONFLICT (id_configuracion) DO UPDATE SET {actualizacion}",
+                tuple(datos[c] for c in CAMPOS_CONFIGURACION),
+            )
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudo guardar la configuración de ACL.") from error
+
+
+def obtener_configuracion(conexion):
+    """Regresa la configuración de ACL como dict, o None si aún no se captura."""
+    fila = conexion.execute(
+        f"SELECT {', '.join(CAMPOS_CONFIGURACION)} FROM configuracion_acl WHERE id_configuracion = 1"
     ).fetchone()
     return dict(fila) if fila else None
