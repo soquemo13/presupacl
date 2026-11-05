@@ -159,6 +159,37 @@ def actualizar_cliente(conexion, id_cliente, nombre, telefono, direcciones_edita
         raise ErrorAlmacenamiento("No se pudieron guardar los cambios del cliente.") from error
 
 
+def _patron_like(texto):
+    """Convierte el texto buscado en un patrón LIKE escapando % y _."""
+    escapado = texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escapado}%"
+
+
+def buscar_clientes(conexion, texto, limite=50):
+    """Busca clientes cuyo nombre o teléfono contenga el texto (RF-04).
+
+    Sin distinguir mayúsculas (LIKE de SQLite, letras sin acento). Regresa una
+    lista de {id_cliente, nombre, telefono, num_direcciones} ordenada por nombre.
+    Si la BD falla lanza ErrorAlmacenamiento; nunca regresa resultados parciales.
+    """
+    patron = _patron_like(texto)
+    try:
+        filas = conexion.execute(
+            """
+            SELECT c.id_cliente, c.nombre, c.telefono, COUNT(d.id_direccion) AS num_direcciones
+            FROM clientes c LEFT JOIN direcciones_cliente d ON d.id_cliente = c.id_cliente
+            WHERE c.nombre LIKE ? ESCAPE '\\' OR c.telefono LIKE ? ESCAPE '\\'
+            GROUP BY c.id_cliente
+            ORDER BY c.nombre, c.id_cliente
+            LIMIT ?
+            """,
+            (patron, patron, limite),
+        ).fetchall()
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudo consultar el repositorio de clientes.") from error
+    return [dict(f) for f in filas]
+
+
 # ---------- Usuarios (RF-01) ----------
 
 def crear_usuario(conexion, usuario, password_hash):
