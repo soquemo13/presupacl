@@ -45,6 +45,10 @@ class ErrorAlmacenamiento(Exception):
     """Error al leer o escribir en la base de datos."""
 
 
+class ErrorNoEncontrado(ErrorAlmacenamiento):
+    """El registro que se quiere modificar no existe."""
+
+
 def abrir_conexion(ruta_bd=None):
     """Abre la base de datos con las llaves foráneas activadas.
 
@@ -117,6 +121,42 @@ def obtener_cliente(conexion, id_cliente):
     cliente = dict(fila)
     cliente["direcciones"] = [dict(d) for d in direcciones]
     return cliente
+
+
+def actualizar_cliente(conexion, id_cliente, nombre, telefono, direcciones_editadas, direcciones_nuevas):
+    """Edita un cliente existente en una sola transacción (RF-03).
+
+    direcciones_editadas: {id_direccion: texto nuevo}; cada id debe pertenecer
+    al cliente. direcciones_nuevas: lista de textos a agregar. No se borran
+    direcciones, así el cliente siempre conserva al menos una (CA-39) y las
+    cotizaciones que ya las usan no pierden la referencia.
+
+    Si el cliente no existe lanza ErrorNoEncontrado y no crea nada (CA-08).
+    """
+    try:
+        with conexion:
+            cursor = conexion.execute(
+                "UPDATE clientes SET nombre = ?, telefono = ?, actualizado_en = ? WHERE id_cliente = ?",
+                (nombre, telefono, _ahora_iso(), id_cliente),
+            )
+            if cursor.rowcount == 0:
+                raise ErrorNoEncontrado(f"No existe el cliente {id_cliente}; no se guardaron cambios.")
+            for id_direccion, direccion in direcciones_editadas.items():
+                cursor = conexion.execute(
+                    "UPDATE direcciones_cliente SET direccion = ? WHERE id_direccion = ? AND id_cliente = ?",
+                    (direccion, id_direccion, id_cliente),
+                )
+                if cursor.rowcount == 0:
+                    raise ErrorNoEncontrado(
+                        f"La dirección {id_direccion} no pertenece al cliente {id_cliente}; no se guardaron cambios."
+                    )
+            for direccion in direcciones_nuevas:
+                conexion.execute(
+                    "INSERT INTO direcciones_cliente (id_cliente, direccion) VALUES (?, ?)",
+                    (id_cliente, direccion),
+                )
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudieron guardar los cambios del cliente.") from error
 
 
 # ---------- Usuarios (RF-01) ----------
