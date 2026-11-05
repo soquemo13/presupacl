@@ -39,6 +39,11 @@ def test_RNF03_la_contrasena_no_se_guarda_en_texto_plano(conexion):
     assert guardado != PASSWORD
 
 
+def test_hash_no_depende_de_scrypt(conexion):
+    """El Python de macOS no trae hashlib.scrypt; se usa pbkdf2."""
+    assert ad.obtener_usuario(conexion, USUARIO)["password_hash"].startswith("pbkdf2:sha256:")
+
+
 def test_usuario_repetido_se_rechaza(conexion):
     with pytest.raises(ad.ErrorAlmacenamiento):
         auth.crear_usuario(conexion, USUARIO, "otra")

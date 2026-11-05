@@ -22,6 +22,10 @@ from proyecto.infraestructura import almacenamiento_datos
 
 MENSAJE_RECHAZO = "Usuario o contraseña incorrectos."
 
+# pbkdf2 en lugar del scrypt predeterminado de werkzeug: el Python 3.9 que trae
+# macOS (Command Line Tools) usa LibreSSL y no tiene hashlib.scrypt.
+METODO_HASH = "pbkdf2:sha256:600000"
+
 
 class ErrorAutenticacion(Exception):
     """Credenciales rechazadas (CA-02)."""
@@ -32,7 +36,7 @@ def crear_usuario(conexion, usuario, password):
     usuario = (usuario or "").strip()
     if not usuario or not password:
         raise ValueError("El usuario y la contraseña son obligatorios.")
-    return almacenamiento_datos.crear_usuario(conexion, usuario, generate_password_hash(password))
+    return almacenamiento_datos.crear_usuario(conexion, usuario, generate_password_hash(password, method=METODO_HASH))
 
 
 def verificar_credenciales(conexion, usuario, password):
