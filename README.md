@@ -6,6 +6,18 @@ Equipo **SofChi**: Sofía Quesada y Vanesa Estrada · Desarrollo de Aplicaciones
 
 ## Estado
 
+**Incremento 2 en la rama `incremento-2` (v0.2.0, entrega 12-nov-2026):** RF-01 inicio de sesión, RF-03 editar cliente, RF-04 buscar cliente, RF-21 configuración de ACL y las primeras pantallas web.
+
+| Tarea | RF | Módulo | Estado |
+|---|---|---|---|
+| T-07 Usuarios y contraseñas con hash | RF-01 | auth, almacenamiento_datos | Terminada (CA-01, CA-02, RNF-03) |
+| T-08 Editar teléfono y direcciones | RF-03 | clientes_registro, almacenamiento_datos | Terminada (CA-07, CA-39, CA-08) |
+| T-09 Búsqueda por nombre o teléfono | RF-04 | clientes_busqueda, almacenamiento_datos | Terminada (CA-09, CA-10, CA-40) |
+| T-10 Configuración de ACL | RF-21 | config/settings, almacenamiento_datos | Terminada (CA-65; CA-36 y CA-64 se cierran con el PDF en el incremento 4) |
+| T-11 Aplicación web y pantallas | RF-01 a RF-04, RF-21 | main.py, templates/ | Terminada (CA-37) |
+
+SUPUESTOS por validar (marcados en el código): Flask/werkzeug para web, hash y sesiones (D09); IVA 0.16, utilidad 0.20 como recargo y vigencia 15 días como valores iniciales editables.
+
 **Incremento 1 terminado (v0.1.0):** RF-02 · registrar cliente con nombre, teléfono y una o varias direcciones, según el plan de implementación v1.2.
 
 | Tarea | Módulo | Estado |
@@ -22,7 +34,7 @@ Documentos vigentes en `docs/`: especificación v2.5 y plan de implementación v
 ## Requisitos
 
 - Python 3.10 o superior (se usa `sqlite3` de la biblioteca estándar).
-- pytest para las pruebas.
+- Flask (aplicación web), fpdf2 (PDF, a partir del incremento 4) y pytest.
 
 ```bash
 python -m pip install -r requirements.txt
@@ -36,6 +48,15 @@ Desde la raíz del repositorio:
 python -m pytest -v
 ```
 
+## Abrir la aplicación web (incremento 2)
+
+```bash
+python -m proyecto.auth.auth admin      # solo la primera vez: pide la contraseña y crea el usuario
+python -m proyecto.main                 # luego abrir http://127.0.0.1:5000 en Chrome o Edge
+```
+
+La contraseña nunca se escribe en el código. Opcional: definir `PRESUPACL_SECRET_KEY` para que la sesión no se cierre al reiniciar, y `PRESUPACL_HOST=0.0.0.0` para abrirla desde otra computadora de la red local.
+
 ## Demostración del incremento 1
 
 ```bash
@@ -48,12 +69,17 @@ Crea `data/presupacl.db`, registra un cliente ficticio con dos direcciones, lo v
 
 ```
 proyecto/
-  clientes/          clientes_registro.py (validación y registro de clientes)
+  auth/              auth.py (inicio de sesión y hash de contraseñas)
+  clientes/          clientes_registro.py (registrar y editar), clientes_busqueda.py
+  config/            settings.py (configuración de ACL)
   infraestructura/   almacenamiento_datos.py (único módulo que accede a la BD)
-  tests/             test_<modulo>.py por módulo y pruebas de integración
+  templates/         pantallas HTML de la aplicación web
+  tests/             test_<modulo>.py por módulo, integración y pantallas web
+  main.py            aplicación web (Flask)
   demo_rf02.py       demostración por consola del incremento 1
 docs/                especificación y planes aprobados
 data/                presupacl.db (se crea al ejecutar; no se sube al repositorio)
+recursos/logo_acl/   logo de ACL subido desde Configuración (no se sube al repositorio)
 ```
 
 Las demás carpetas de la arquitectura (auth, catalogo, cotizaciones, etc.) se agregan cuando su incremento tenga código.
