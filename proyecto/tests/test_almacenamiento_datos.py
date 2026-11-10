@@ -34,9 +34,9 @@ def test_abrir_conexion_crea_la_carpeta_si_no_existe(tmp_path):
     assert ruta.exists()
 
 
-def test_crear_esquema_crea_las_dos_tablas(conexion):
+def test_crear_esquema_crea_las_tablas(conexion):
     tablas = {f["name"] for f in conexion.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert {"clientes", "direcciones_cliente"} <= tablas
+    assert {"clientes", "direcciones_cliente", "usuarios"} <= tablas
 
 
 def test_crear_esquema_dos_veces_no_falla(conexion):

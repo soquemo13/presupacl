@@ -1,4 +1,4 @@
-"""clientes_registro: registrar clientes nuevos con sus direcciones (RF-02, HU-02).
+"""clientes_registro: registrar y editar clientes con sus direcciones (RF-02, RF-03).
 
 Responsabilidad (sección 2.5 de la especificación v2.5): validar los datos que
 captura el usuario y pedir el guardado a almacenamiento_datos. Este módulo no
@@ -8,6 +8,8 @@ Contrato acordado en T-02 (plan de implementación v1.2):
     registrar_cliente(conexion, nombre, telefono, direcciones) -> id_cliente
     Si faltan datos, lanza ErrorValidacion con la lista de campos faltantes y
     no llama al almacenamiento.
+    editar_cliente(conexion, id_cliente, nombre, telefono,
+                   direcciones_editadas, direcciones_nuevas)   (incremento 2)
 
 Supuesto de D07 (por validar con ACL): nombre, teléfono y direcciones se
 recortan de espacios; un valor vacío o solo con espacios cuenta como faltante.
@@ -23,10 +25,10 @@ ETIQUETAS = {"nombre": "nombre", "telefono": "teléfono", "direcciones": "al men
 class ErrorValidacion(Exception):
     """Faltan datos obligatorios; no se guardó nada (CA-05, CA-68)."""
 
-    def __init__(self, campos_faltantes):
+    def __init__(self, campos_faltantes, mensaje=None):
         self.campos_faltantes = campos_faltantes
         etiquetas = ", ".join(ETIQUETAS[c] for c in campos_faltantes)
-        super().__init__(f"Faltan datos obligatorios: {etiquetas}. No se guardó el cliente.")
+        super().__init__(mensaje or f"Faltan datos obligatorios: {etiquetas}. No se guardó el cliente.")
 
 
 def _limpiar(texto):
@@ -62,4 +64,38 @@ def registrar_cliente(conexion, nombre, telefono, direcciones):
         _limpiar(nombre),
         _limpiar(telefono),
         [_limpiar(d) for d in direcciones],
+    )
+
+
+def editar_cliente(conexion, id_cliente, nombre, telefono, direcciones_editadas=None, direcciones_nuevas=None):
+    """Valida y guarda los cambios de un cliente existente (RF-03).
+
+    direcciones_editadas: {id_direccion: texto}. Ninguna puede quedar en blanco,
+    así el cliente conserva siempre direcciones válidas (CA-39).
+    direcciones_nuevas: textos a agregar; los renglones vacíos se ignoran
+    porque el formulario siempre muestra un campo extra (CA-07).
+
+    Si el cliente no existe, almacenamiento_datos lanza ErrorNoEncontrado y
+    no se crea otro cliente (CA-08).
+    """
+    direcciones_editadas = direcciones_editadas or {}
+    faltantes = []
+    if not _limpiar(nombre):
+        faltantes.append("nombre")
+    if not _limpiar(telefono):
+        faltantes.append("telefono")
+    if faltantes:
+        raise ErrorValidacion(faltantes, "Faltan datos obligatorios: "
+                              + ", ".join(ETIQUETAS[c] for c in faltantes)
+                              + ". No se guardaron los cambios.")
+    if any(not _limpiar(d) for d in direcciones_editadas.values()):
+        raise ErrorValidacion(["direcciones"], "Una dirección no puede quedar en blanco. No se guardaron los cambios.")
+
+    almacenamiento_datos.actualizar_cliente(
+        conexion,
+        id_cliente,
+        _limpiar(nombre),
+        _limpiar(telefono),
+        {int(i): _limpiar(d) for i, d in direcciones_editadas.items()},
+        [_limpiar(d) for d in (direcciones_nuevas or []) if _limpiar(d)],
     )

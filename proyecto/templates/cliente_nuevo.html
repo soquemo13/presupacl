@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titulo %}Registrar cliente{% endblock %}
+{% block contenido %}
+<h1>Registrar cliente</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" class="tarjeta">
+  <input type="hidden" name="_token" value="{{ token }}">
+  <label for="nombre">Nombre</label>
+  <input type="text" id="nombre" name="nombre" value="{{ datos.nombre }}" {% if 'nombre' in faltantes %}class="campo-error"{% endif %}>
+  <label for="telefono">Teléfono</label>
+  <input type="text" id="telefono" name="telefono" value="{{ datos.telefono }}" {% if 'telefono' in faltantes %}class="campo-error"{% endif %}>
+  <label>Direcciones (al menos una)</label>
+  {% for d in datos.direcciones %}
+  <input type="text" name="direccion" value="{{ d }}" {% if 'direcciones' in faltantes %}class="campo-error"{% endif %} style="margin-bottom:6px">
+  {% endfor %}
+  <input type="text" name="direccion" placeholder="Otra dirección (opcional)" style="margin-bottom:6px">
+  <button class="primario" type="submit">Guardar cliente</button>
+</form>
+{% endblock %}

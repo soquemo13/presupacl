@@ -1,11 +1,12 @@
 """almacenamiento_datos: único módulo de PresupACL que accede a la base de datos.
 
-Responsabilidad (sección 3.8 de la especificación v2.4): centralizar la conexión
+Responsabilidad (sección 3.8 de la especificación v2.5): centralizar la conexión
 a SQLite, las consultas parametrizadas, las transacciones y la integridad
 referencial. Ningún otro módulo debe ejecutar SQL.
 
-Incremento 1 (RF-02): solo se crean las tablas clientes y direcciones_cliente.
-Las otras siete tablas se agregan en el incremento que las use.
+Cada tabla se agrega en el incremento que la usa:
+- Incremento 1 (RF-02): clientes, direcciones_cliente.
+- Incremento 2 (RF-01, RF-21): usuarios, configuracion_acl.
 """
 
 import sqlite3
@@ -15,7 +16,7 @@ from pathlib import Path
 # data/presupacl.db en la raíz del repositorio. Las pruebas pasan su propia ruta.
 RUTA_BD_PREDETERMINADA = Path(__file__).resolve().parents[2] / "data" / "presupacl.db"
 
-# Esquema según el diccionario de datos (sección 3.4 de v2.4).
+# Esquema según el diccionario de datos (sección 3.4 de v2.5).
 # Los CHECK evitan guardar textos vacíos aunque un módulo se salte la validación.
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS clientes (
@@ -31,11 +32,34 @@ CREATE TABLE IF NOT EXISTS direcciones_cliente (
     id_cliente      INTEGER NOT NULL REFERENCES clientes (id_cliente),
     direccion       TEXT NOT NULL CHECK (length(trim(direccion)) > 0)
 );
+
+CREATE TABLE IF NOT EXISTS usuarios (
+    id_usuario      INTEGER PRIMARY KEY,
+    usuario         TEXT NOT NULL UNIQUE CHECK (length(trim(usuario)) > 0),
+    password_hash   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS configuracion_acl (
+    id_configuracion        INTEGER PRIMARY KEY CHECK (id_configuracion = 1),
+    nombre_comercial        TEXT NOT NULL CHECK (length(trim(nombre_comercial)) > 0),
+    telefono                TEXT NOT NULL CHECK (length(trim(telefono)) > 0),
+    correo                  TEXT NOT NULL CHECK (length(trim(correo)) > 0),
+    logo_ruta               TEXT,
+    condiciones_default     TEXT NOT NULL,
+    vigencia_dias_default   INTEGER NOT NULL CHECK (vigencia_dias_default > 0),
+    iva_tasa_default        TEXT NOT NULL,
+    utilidad_tasa_default   TEXT NOT NULL,
+    metodo_utilidad         TEXT NOT NULL CHECK (metodo_utilidad IN ('margen', 'recargo'))
+);
 """
 
 
 class ErrorAlmacenamiento(Exception):
     """Error al leer o escribir en la base de datos."""
+
+
+class ErrorNoEncontrado(ErrorAlmacenamiento):
+    """El registro que se quiere modificar no existe."""
 
 
 def abrir_conexion(ruta_bd=None):
@@ -110,3 +134,135 @@ def obtener_cliente(conexion, id_cliente):
     cliente = dict(fila)
     cliente["direcciones"] = [dict(d) for d in direcciones]
     return cliente
+
+
+def actualizar_cliente(conexion, id_cliente, nombre, telefono, direcciones_editadas, direcciones_nuevas):
+    """Edita un cliente existente en una sola transacción (RF-03).
+
+    direcciones_editadas: {id_direccion: texto nuevo}; cada id debe pertenecer
+    al cliente. direcciones_nuevas: lista de textos a agregar. No se borran
+    direcciones, así el cliente siempre conserva al menos una (CA-39) y las
+    cotizaciones que ya las usan no pierden la referencia.
+
+    Si el cliente no existe lanza ErrorNoEncontrado y no crea nada (CA-08).
+    """
+    try:
+        with conexion:
+            cursor = conexion.execute(
+                "UPDATE clientes SET nombre = ?, telefono = ?, actualizado_en = ? WHERE id_cliente = ?",
+                (nombre, telefono, _ahora_iso(), id_cliente),
+            )
+            if cursor.rowcount == 0:
+                raise ErrorNoEncontrado(f"No existe el cliente {id_cliente}; no se guardaron cambios.")
+            for id_direccion, direccion in direcciones_editadas.items():
+                cursor = conexion.execute(
+                    "UPDATE direcciones_cliente SET direccion = ? WHERE id_direccion = ? AND id_cliente = ?",
+                    (direccion, id_direccion, id_cliente),
+                )
+                if cursor.rowcount == 0:
+                    raise ErrorNoEncontrado(
+                        f"La dirección {id_direccion} no pertenece al cliente {id_cliente}; no se guardaron cambios."
+                    )
+            for direccion in direcciones_nuevas:
+                conexion.execute(
+                    "INSERT INTO direcciones_cliente (id_cliente, direccion) VALUES (?, ?)",
+                    (id_cliente, direccion),
+                )
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudieron guardar los cambios del cliente.") from error
+
+
+def _patron_like(texto):
+    """Convierte el texto buscado en un patrón LIKE escapando % y _."""
+    escapado = texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escapado}%"
+
+
+def buscar_clientes(conexion, texto, limite=50):
+    """Busca clientes cuyo nombre o teléfono contenga el texto (RF-04).
+
+    Sin distinguir mayúsculas (LIKE de SQLite, letras sin acento). Regresa una
+    lista de {id_cliente, nombre, telefono, num_direcciones} ordenada por nombre.
+    Si la BD falla lanza ErrorAlmacenamiento; nunca regresa resultados parciales.
+    """
+    patron = _patron_like(texto)
+    try:
+        filas = conexion.execute(
+            """
+            SELECT c.id_cliente, c.nombre, c.telefono, COUNT(d.id_direccion) AS num_direcciones
+            FROM clientes c LEFT JOIN direcciones_cliente d ON d.id_cliente = c.id_cliente
+            WHERE c.nombre LIKE ? ESCAPE '\\' OR c.telefono LIKE ? ESCAPE '\\'
+            GROUP BY c.id_cliente
+            ORDER BY c.nombre, c.id_cliente
+            LIMIT ?
+            """,
+            (patron, patron, limite),
+        ).fetchall()
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudo consultar el repositorio de clientes.") from error
+    return [dict(f) for f in filas]
+
+
+# ---------- Usuarios (RF-01) ----------
+
+def crear_usuario(conexion, usuario, password_hash):
+    """Guarda un usuario con su contraseña ya convertida en hash por auth.
+
+    Este módulo nunca recibe la contraseña en texto plano (RNF-03).
+    Regresa el id_usuario o lanza ErrorAlmacenamiento si el usuario ya existe.
+    """
+    try:
+        with conexion:
+            cursor = conexion.execute(
+                "INSERT INTO usuarios (usuario, password_hash) VALUES (?, ?)",
+                (usuario, password_hash),
+            )
+    except sqlite3.IntegrityError as error:
+        raise ErrorAlmacenamiento(f"El usuario «{usuario}» ya existe o no es válido.") from error
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudo guardar el usuario.") from error
+    return cursor.lastrowid
+
+
+def obtener_usuario(conexion, usuario):
+    """Regresa {id_usuario, usuario, password_hash} o None si no existe."""
+    fila = conexion.execute(
+        "SELECT id_usuario, usuario, password_hash FROM usuarios WHERE usuario = ?",
+        (usuario,),
+    ).fetchone()
+    return dict(fila) if fila else None
+
+
+# ---------- Configuración de ACL (RF-21) ----------
+
+CAMPOS_CONFIGURACION = (
+    "nombre_comercial", "telefono", "correo", "logo_ruta", "condiciones_default",
+    "vigencia_dias_default", "iva_tasa_default", "utilidad_tasa_default", "metodo_utilidad",
+)
+
+
+def guardar_configuracion(conexion, datos):
+    """Crea o reemplaza el único registro de configuración (id 1).
+
+    Si falla, revierte y lanza ErrorAlmacenamiento; el registro anterior queda igual (CA-65).
+    """
+    columnas = ", ".join(CAMPOS_CONFIGURACION)
+    marcas = ", ".join("?" for _ in CAMPOS_CONFIGURACION)
+    actualizacion = ", ".join(f"{c} = excluded.{c}" for c in CAMPOS_CONFIGURACION)
+    try:
+        with conexion:
+            conexion.execute(
+                f"INSERT INTO configuracion_acl (id_configuracion, {columnas}) VALUES (1, {marcas}) "
+                f"ON CONFLICT (id_configuracion) DO UPDATE SET {actualizacion}",
+                tuple(datos[c] for c in CAMPOS_CONFIGURACION),
+            )
+    except sqlite3.Error as error:
+        raise ErrorAlmacenamiento("No se pudo guardar la configuración de ACL.") from error
+
+
+def obtener_configuracion(conexion):
+    """Regresa la configuración de ACL como dict, o None si aún no se captura."""
+    fila = conexion.execute(
+        f"SELECT {', '.join(CAMPOS_CONFIGURACION)} FROM configuracion_acl WHERE id_configuracion = 1"
+    ).fetchone()
+    return dict(fila) if fila else None

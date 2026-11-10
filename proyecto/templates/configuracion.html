@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titulo %}Configuración de ACL{% endblock %}
+{% block contenido %}
+<h1>Configuración de ACL</h1>
+<p class="nota">Estos datos se copian a cada cotización nueva. Cambiarlos no modifica cotizaciones ya emitidas.</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" enctype="multipart/form-data" class="tarjeta">
+  <input type="hidden" name="_token" value="{{ token }}">
+  {% macro campo(nombre, etiqueta, tipo="text") %}
+  <label for="{{ nombre }}">{{ etiqueta }}</label>
+  <input type="{{ tipo }}" id="{{ nombre }}" name="{{ nombre }}" value="{{ config[nombre] if config[nombre] is not none else '' }}" {% if nombre in campos %}class="campo-error"{% endif %}>
+  {% endmacro %}
+  {{ campo("nombre_comercial", "Nombre comercial") }}
+  {{ campo("telefono", "Teléfono") }}
+  {{ campo("correo", "Correo") }}
+  <label for="logo">Logo (PNG o JPG)</label>
+  {% if config.logo_ruta %}<p class="nota">Logo actual: {{ config.logo_ruta }}</p>{% endif %}
+  <input type="file" id="logo" name="logo" accept=".png,.jpg,.jpeg">
+  <label for="condiciones_default">Condiciones comerciales por defecto</label>
+  <textarea id="condiciones_default" name="condiciones_default">{{ config.condiciones_default or '' }}</textarea>
+  {{ campo("vigencia_dias_default", "Vigencia (días)", "number") }}
+  {{ campo("iva_tasa_default", "Tasa de IVA (fracción, ej. 0.16)") }}
+  {{ campo("utilidad_tasa_default", "Tasa de utilidad (fracción, ej. 0.20)") }}
+  <label for="metodo_utilidad">Método de utilidad</label>
+  <select id="metodo_utilidad" name="metodo_utilidad" {% if 'metodo_utilidad' in campos %}class="campo-error"{% endif %}>
+    <option value="recargo" {% if config.metodo_utilidad == 'recargo' %}selected{% endif %}>Recargo sobre el subtotal</option>
+    <option value="margen" {% if config.metodo_utilidad == 'margen' %}selected{% endif %}>Margen sobre el precio de venta</option>
+  </select>
+  <p class="nota">SUPUESTO — validar con ACL: IVA 0.16, utilidad 0.20 como recargo, vigencia 15 días.</p>
+  <button class="primario" type="submit">Guardar configuración</button>
+</form>
+{% endblock %}

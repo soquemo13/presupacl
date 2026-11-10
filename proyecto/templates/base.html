@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}PresupACL{% endblock %} · PresupACL</title>
+  <style>
+    :root { --azul: #1f4e79; --gris: #f3f5f8; --borde: #ccd3dc; --error: #b00020; --ok: #1b7a3a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, Segoe UI, Arial, sans-serif; background: var(--gris); color: #1d2329; }
+    header { background: var(--azul); color: #fff; padding: 10px 20px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+    header a, header button { color: #fff; text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer; }
+    header strong { margin-right: auto; }
+    main { max-width: 960px; margin: 20px auto; padding: 0 16px; }
+    .tarjeta { background: #fff; border: 1px solid var(--borde); border-radius: 6px; padding: 18px; margin-bottom: 16px; }
+    label { display: block; font-weight: 600; margin: 10px 0 4px; }
+    input[type=text], input[type=password], input[type=email], input[type=number], textarea, select {
+      width: 100%; padding: 8px; border: 1px solid var(--borde); border-radius: 4px; font: inherit; }
+    textarea { min-height: 120px; }
+    .campo-error { border-color: var(--error) !important; }
+    button.primario, a.boton { background: var(--azul); color: #fff; border: 0; padding: 8px 16px; border-radius: 4px; cursor: pointer; font: inherit; text-decoration: none; display: inline-block; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { border: 1px solid var(--borde); padding: 6px 8px; text-align: left; }
+    th { background: #e7ecf2; }
+    .error { color: var(--error); background: #fdecee; padding: 10px; border-radius: 4px; }
+    .aviso { color: var(--ok); background: #e8f5ec; padding: 10px; border-radius: 4px; }
+    .nota { color: #5a6570; font-size: .9em; }
+  </style>
+</head>
+<body>
+  {% if usuario_actual %}
+  <header>
+    <strong>PresupACL</strong>
+    <a href="{{ url_for('panel') }}">Inicio</a>
+    <a href="{{ url_for('clientes') }}">Clientes</a>
+    <a href="{{ url_for('configuracion') }}">Configuración</a>
+    <form method="post" action="{{ url_for('logout') }}" style="margin:0">
+      <input type="hidden" name="_token" value="{{ token }}">
+      <button type="submit">Salir ({{ usuario_actual }})</button>
+    </form>
+  </header>
+  {% endif %}
+  <main>
+    {% for mensaje in get_flashed_messages() %}<p class="aviso">{{ mensaje }}</p>{% endfor %}
+    {% block contenido %}{% endblock %}
+  </main>
+</body>
+</html>
